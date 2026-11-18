@@ -1,0 +1,1770 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>BIRD HUNTER – PEMBURU TARGET CERDAS | Al-Qur'an Hadis Kelas 1 MI</title>
+    
+    <!-- Google Fonts: Fredoka & Nunito (Ramah anak SD/MI) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@600;700;800;900&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- MediaPipe Hands & Camera Utils CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
+    <style>
+        /* Pengaturan Dasar & Font */
+        body {
+            font-family: 'Nunito', sans-serif;
+            overflow: hidden;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+            background: linear-gradient(180deg, #38bdf8 0%, #bae6fd 65%, #86efac 100%);
+        }
+
+        h1, h2, h3, .font-arcade {
+            font-family: 'Fredoka', sans-serif;
+        }
+
+        /* Tombol Gaya Arcade 3D */
+        .btn-arcade {
+            transition: all 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
+            box-shadow: 0 6px 0 rgba(0, 0, 0, 0.25), 0 10px 20px rgba(0, 0, 0, 0.15);
+        }
+        .btn-arcade:hover:not(:disabled) {
+            transform: translateY(-2px);
+            filter: brightness(1.05);
+        }
+        .btn-arcade:active:not(:disabled) {
+            transform: translateY(4px);
+            box-shadow: 0 2px 0 rgba(0, 0, 0, 0.25), 0 4px 8px rgba(0, 0, 0, 0.15);
+        }
+        .btn-arcade:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        /* Animasi Mengambang */
+        @keyframes floatSlow {
+            0%, 100% { transform: translateY(0px) rotate(0deg); }
+            50% { transform: translateY(-10px) rotate(1.5deg); }
+        }
+        .animate-float {
+            animation: floatSlow 3.5s ease-in-out infinite;
+        }
+
+        /* Animasi Pop-In Modal */
+        @keyframes popIn {
+            0% { transform: scale(0.7); opacity: 0; }
+            80% { transform: scale(1.05); opacity: 1; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        .animate-pop-in {
+            animation: popIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+        }
+
+        /* Retikel Bidikan Kustom */
+        #reticle {
+            pointer-events: none;
+            z-index: 60;
+            transform: translate(-50%, -50%);
+            transition: width 0.12s ease, height 0.12s ease;
+        }
+        .reticle-ring {
+            transition: all 0.15s ease;
+        }
+        .reticle-locked .reticle-ring {
+            border-color: #facc15 !important;
+            background-color: rgba(250, 204, 21, 0.2);
+            transform: scale(1.18);
+        }
+        .reticle-pinching .reticle-ring {
+            border-color: #ef4444 !important;
+            background-color: rgba(239, 68, 68, 0.35);
+            transform: scale(0.8);
+        }
+
+        /* Mirror Video Kamera Mini */
+        .mirror-canvas {
+            transform: scaleX(-1);
+        }
+
+        /* Custom Scrollbar untuk Layar Kecil */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(255,255,255,0.3);
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(14, 165, 233, 0.6);
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body class="w-screen h-screen relative overflow-hidden text-slate-800">
+
+    <!-- CANVAS UTAMA: Latar Belakang Taman Fantasi, Burung Kartun, Balon Target & Partikel -->
+    <canvas id="gameCanvas" class="absolute inset-0 w-full h-full block z-0 cursor-crosshair"></canvas>
+
+    <!-- RETIKEL BIDIKAN (Mengikuti Telunjuk Kamera atau Kursor Mouse) -->
+    <div id="reticle" class="fixed top-1/2 left-1/2 w-16 h-16 flex items-center justify-center hidden">
+        <div class="reticle-ring w-full h-full rounded-full border-4 border-red-500 shadow-[0_0_15px_rgba(239,68,68,0.8)] flex items-center justify-center relative">
+            <!-- Garis Bidik Silang -->
+            <div class="absolute w-3 h-1 bg-red-500 -left-2 rounded-full"></div>
+            <div class="absolute w-3 h-1 bg-red-500 -right-2 rounded-full"></div>
+            <div class="absolute h-3 w-1 bg-red-500 -top-2 rounded-full"></div>
+            <div class="absolute h-3 w-1 bg-red-500 -bottom-2 rounded-full"></div>
+            <!-- Titik Tengah -->
+            <div class="w-2.5 h-2.5 bg-yellow-300 border-2 border-red-600 rounded-full"></div>
+        </div>
+    </div>
+
+    <!-- PREVIEW KAMERA MINI (Picture-in-Picture di Sudut Kanan Bawah saat Kamera Aktif) -->
+    <div id="cameraPreviewBox" class="fixed bottom-3 right-3 z-40 hidden bg-slate-900/90 p-1.5 rounded-2xl border-4 border-amber-400 shadow-2xl transition-all">
+        <div class="relative w-36 h-28 sm:w-44 sm:h-32 rounded-xl overflow-hidden bg-black">
+            <video id="inputVideo" class="hidden" playsinline></video>
+            <canvas id="outputHandCanvas" class="w-full h-full object-cover mirror-canvas"></canvas>
+            <div id="gestureBadge" class="absolute bottom-1 left-1 right-1 text-center text-[10px] sm:text-xs font-extrabold px-2 py-0.5 rounded-full bg-emerald-500 text-white shadow">
+                ✋ Arahkan Telunjuk
+            </div>
+        </div>
+    </div>
+
+    <!-- =====================================================================
+         1. LAYAR AWAL / MENU UTAMA
+         ===================================================================== -->
+    <div id="startScreen" class="fixed inset-0 z-30 flex items-center justify-center p-3 sm:p-6 overflow-y-auto bg-sky-900/20 backdrop-blur-[2px]">
+        <div class="bg-white/95 border-4 border-amber-400 rounded-3xl shadow-2xl max-w-2xl w-full p-5 sm:p-7 animate-pop-in my-auto">
+            
+            <!-- Badge Identitas Mapel -->
+            <div class="flex flex-wrap items-center justify-center gap-2 mb-2">
+                <span class="bg-emerald-100 text-emerald-800 border border-emerald-300 text-xs sm:text-sm font-extrabold px-3 py-1 rounded-full">
+                    📖 Al-Qur'an Hadis • Kelas 1 MI
+                </span>
+                <span class="bg-amber-100 text-amber-800 border border-amber-300 text-xs sm:text-sm font-extrabold px-3 py-1 rounded-full">
+                    🌟 Materi: Surat Al-Fatihah
+                </span>
+            </div>
+
+            <!-- Judul Game -->
+            <div class="text-center mb-4">
+                <h1 class="text-3xl sm:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 drop-shadow-sm tracking-tight leading-tight">
+                    BIRD HUNTER
+                </h1>
+                <p class="text-base sm:text-xl font-arcade font-bold text-sky-700 tracking-wide">
+                    🎯 PEMBURU TARGET CERDAS
+                </p>
+            </div>
+
+            <!-- Input Nama Pemain -->
+            <div class="bg-sky-50 border-2 border-sky-200 rounded-2xl p-4 mb-4">
+                <label for="playerNameInput" class="block text-sm sm:text-base font-extrabold text-sky-900 mb-1.5">
+                    🧑‍🎓 Siapa Nama Penjaga Taman Burung?
+                </label>
+                <div class="flex flex-col sm:flex-row gap-2">
+                    <input type="text" id="playerNameInput" maxlength="20" placeholder="Ketik namamu di sini (contoh: Ahmad)" 
+                        class="flex-1 px-4 py-3 rounded-xl border-2 border-sky-300 focus:border-amber-400 focus:outline-none text-base sm:text-lg font-bold text-slate-800 bg-white shadow-inner">
+                </div>
+            </div>
+
+            <!-- Kontrol Kamera Gesture (Tidak aktif otomatis sebelum diklik!) -->
+            <div class="bg-amber-50 border-2 border-amber-200 rounded-2xl p-3.5 mb-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+                <div class="flex items-center gap-3 text-left">
+                    <div class="w-11 h-11 rounded-2xl bg-amber-400 text-white flex items-center justify-center text-2xl shrink-0 shadow">
+                        📷
+                    </div>
+                    <div>
+                        <h3 class="font-extrabold text-slate-800 text-sm sm:text-base">Kontrol Gerakan Tangan (Kamera)</h3>
+                        <p id="cameraStatusText" class="text-xs text-slate-600 font-semibold">
+                            Status: Nonaktif (Bisa main pakai Mouse/Sentuh atau aktifkan kamera)
+                        </p>
+                    </div>
+                </div>
+                <button id="btnActivateCameraStart" onclick="toggleCameraGesture()" 
+                    class="btn-arcade w-full sm:w-auto px-4 py-2.5 rounded-xl bg-gradient-to-b from-sky-400 to-sky-600 text-white font-extrabold text-xs sm:text-sm border-2 border-sky-300 shrink-0">
+                    🎥 Aktifkan Kamera Gesture
+                </button>
+            </div>
+
+            <!-- Peta Pilihan 5 Level (Terbuka Bertahap) -->
+            <div class="mb-5">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-sm font-extrabold text-slate-700">🗺️ Pilih Level Petualangan (5 Level):</span>
+                    <span class="text-xs font-bold text-emerald-700 bg-emerald-100 px-2.5 py-0.5 rounded-full">3 Soal / Level</span>
+                </div>
+                <div id="levelGrid" class="grid grid-cols-5 gap-2">
+                    <!-- Diisi via JavaScript -->
+                </div>
+            </div>
+
+            <!-- Cara Bermain Singkat & Tombol Mulai -->
+            <div class="bg-emerald-50 border border-emerald-200 rounded-xl p-3 mb-5 text-xs sm:text-sm text-emerald-900 font-semibold">
+                <p class="font-extrabold mb-1">💡 Cara Bermain:</p>
+                <ul class="list-disc list-inside space-y-0.5">
+                    <li>Arahkan <strong>jari telunjuk</strong> (via kamera) atau <strong>kursor/sentuhan</strong> ke balon jawaban yang benar.</li>
+                    <li>Lakukan gerakan <strong>menjepit (Pinch: jempol + telunjuk)</strong> atau <strong>klik/ketuk</strong> untuk memecahkan balon!</li>
+                </ul>
+            </div>
+
+            <div class="flex flex-col sm:flex-row gap-3">
+                <button onclick="startSelectedLevel()" 
+                    class="btn-arcade flex-1 py-3.5 px-6 rounded-2xl bg-gradient-to-b from-emerald-400 to-emerald-600 text-white font-arcade font-bold text-xl sm:text-2xl border-2 border-emerald-300 flex items-center justify-center gap-2">
+                    <span>🚀 MULAI BERMAIN</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- =====================================================================
+         2. HUD / NAVBAR ATAS & PANEL PERTANYAAN (SAAT BERMAIN)
+         ===================================================================== -->
+    <div id="gameHud" class="fixed top-0 left-0 right-0 z-20 hidden pointer-events-none p-2 sm:p-3 flex flex-col gap-2">
+        
+        <!-- Navbar Informasi Pemain, Level, Soal, Skor, Timer & Kontrol -->
+        <div class="max-w-6xl w-full mx-auto bg-white/95 backdrop-blur-md border-4 border-amber-400 rounded-2xl shadow-lg px-3 py-2 flex flex-wrap items-center justify-between gap-2 pointer-events-auto">
+            
+            <!-- Nama Pemain -->
+            <div class="flex items-center gap-2 bg-sky-100 px-3 py-1.5 rounded-xl border border-sky-200">
+                <span class="text-lg">🧑‍🎓</span>
+                <div>
+                    <div class="text-[10px] font-bold text-sky-600 uppercase leading-none">Penjaga</div>
+                    <div id="hudPlayerName" class="text-xs sm:text-sm font-black text-sky-950 truncate max-w-[100px] sm:max-w-[140px]">Ahmad</div>
+                </div>
+            </div>
+
+            <!-- Level & Nomor Soal -->
+            <div class="flex items-center gap-2">
+                <div class="bg-purple-100 px-3 py-1.5 rounded-xl border border-purple-200 text-center">
+                    <div class="text-[10px] font-bold text-purple-600 uppercase leading-none">Level</div>
+                    <div id="hudLevel" class="text-xs sm:text-sm font-black text-purple-950">1 / 5</div>
+                </div>
+                <div class="bg-amber-100 px-3 py-1.5 rounded-xl border border-amber-200 text-center">
+                    <div class="text-[10px] font-bold text-amber-700 uppercase leading-none">Soal</div>
+                    <div id="hudQuestionNum" class="text-xs sm:text-sm font-black text-amber-950">1 / 3</div>
+                </div>
+            </div>
+
+            <!-- Skor & Timer -->
+            <div class="flex items-center gap-2">
+                <div class="bg-emerald-100 px-3 py-1.5 rounded-xl border border-emerald-300 text-center">
+                    <div class="text-[10px] font-bold text-emerald-700 uppercase leading-none">Skor</div>
+                    <div id="hudScore" class="text-sm sm:text-base font-black text-emerald-800">0</div>
+                </div>
+                <div id="timerBox" class="bg-rose-100 px-3 py-1.5 rounded-xl border border-rose-300 text-center min-w-[68px]">
+                    <div class="text-[10px] font-bold text-rose-700 uppercase leading-none">Waktu</div>
+                    <div id="hudTimer" class="text-sm sm:text-base font-black text-rose-700">45d</div>
+                </div>
+            </div>
+
+            <!-- Tombol Kamera Toggle & Menu -->
+            <div class="flex items-center gap-1.5">
+                <button id="btnHudCamera" onclick="toggleCameraGesture()" title="Aktifkan/Matikan Kamera Gesture"
+                    class="btn-arcade px-2.5 py-2 rounded-xl bg-sky-500 text-white text-xs font-extrabold border border-sky-300 flex items-center gap-1">
+                    <span>📷</span>
+                    <span id="hudCameraLabel" class="hidden md:inline">Kamera: OFF</span>
+                </button>
+                <button onclick="returnToMenu()" title="Kembali ke Menu"
+                    class="btn-arcade px-2.5 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-extrabold border border-slate-300">
+                    🏠
+                </button>
+            </div>
+        </div>
+
+        <!-- Panel Pertanyaan -->
+        <div class="max-w-4xl w-full mx-auto bg-white/95 backdrop-blur-md border-4 border-sky-400 rounded-3xl shadow-xl px-4 py-3 sm:px-6 sm:py-4 pointer-events-auto relative">
+            <div class="flex items-center justify-between gap-2 mb-1.5">
+                <div class="flex items-center gap-2">
+                    <span id="questionLevelBadge" class="text-xs font-extrabold px-2.5 py-0.5 rounded-full bg-sky-100 text-sky-800 border border-sky-300">
+                        Level 1: Mengenal Surat Al-Fatihah
+                    </span>
+                    <span id="questionHotsBadge" class="text-xs font-black px-2.5 py-0.5 rounded-full bg-amber-400 text-amber-950 shadow-sm">
+                        LOTS
+                    </span>
+                </div>
+                <!-- Tombol Bacakan Soal (Text-to-Speech Bahasa Indonesia) -->
+                <button onclick="speakCurrentQuestion()" class="flex items-center gap-1 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 text-xs font-extrabold px-3 py-1 rounded-full border border-emerald-300 transition active:scale-95">
+                    <span>🔊</span>
+                    <span>Dengarkan Soal</span>
+                </button>
+            </div>
+            <h2 id="questionText" class="text-base sm:text-xl md:text-2xl font-extrabold text-slate-800 text-center leading-snug">
+                Memuat pertanyaan...
+            </h2>
+        </div>
+    </div>
+
+    <!-- =====================================================================
+         3. MODAL UMPAN BALIK JAWABAN (BENAR / SALAH DENGAN PENJELASAN RAMAH ANAK)
+         ===================================================================== -->
+    <div id="feedbackModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs">
+        <div id="feedbackCard" class="bg-white border-4 border-emerald-400 rounded-3xl shadow-2xl max-w-md w-full p-6 text-center animate-pop-in">
+            <div id="feedbackIcon" class="text-6xl mb-2">🎉</div>
+            <h3 id="feedbackTitle" class="text-2xl sm:text-3xl font-arcade font-bold text-emerald-600 mb-2">
+                Hebat Sekali!
+            </h3>
+            <div id="feedbackPointsBadge" class="inline-block bg-amber-100 border-2 border-amber-400 text-amber-800 font-black px-4 py-1 rounded-full text-sm mb-3">
+                +100 Poin!
+            </div>
+            <p id="feedbackExplanation" class="text-sm sm:text-base font-bold text-slate-700 bg-slate-50 p-4 rounded-2xl border border-slate-200 mb-5 leading-relaxed">
+                Penjelasan ramah anak muncul di sini.
+            </p>
+            <button id="btnNextQuestion" onclick="nextStepAfterFeedback()" 
+                class="btn-arcade w-full py-3.5 px-6 rounded-2xl bg-gradient-to-b from-sky-400 to-sky-600 text-white font-arcade font-bold text-lg sm:text-xl border-2 border-sky-300">
+                Lanjut Soal Berikutnya ➡️
+            </button>
+        </div>
+    </div>
+
+    <!-- =====================================================================
+         4. MODAL SELESAI LEVEL (TRANSISI ANTAR LEVEL)
+         ===================================================================== -->
+    <div id="levelCompleteModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-slate-900/55 backdrop-blur-xs">
+        <div class="bg-white border-4 border-amber-400 rounded-3xl shadow-2xl max-w-md w-full p-6 text-center animate-pop-in">
+            <div class="text-6xl mb-2">🏆</div>
+            <h3 id="levelCompleteTitle" class="text-2xl sm:text-3xl font-arcade font-bold text-amber-600 mb-1">
+                Level 1 Selesai!
+            </h3>
+            <p id="levelCompleteSubtitle" class="text-sm sm:text-base font-bold text-slate-600 mb-4">
+                Alhamdulillah, kamu berhasil menyelesaikan tantangan di level ini!
+            </p>
+            <div class="bg-amber-50 border-2 border-amber-200 rounded-2xl p-4 mb-5">
+                <div class="text-xs font-extrabold text-amber-700 uppercase">Total Skor Sementara</div>
+                <div id="levelCompleteScore" class="text-3xl sm:text-4xl font-black text-emerald-600">300</div>
+            </div>
+            <button id="btnNextLevel" onclick="proceedToNextLevel()" 
+                class="btn-arcade w-full py-3.5 px-6 rounded-2xl bg-gradient-to-b from-emerald-400 to-emerald-600 text-white font-arcade font-bold text-lg sm:text-xl border-2 border-emerald-300">
+                Buka Level Berikutnya 🚀
+            </button>
+        </div>
+    </div>
+
+    <!-- =====================================================================
+         5. HALAMAN HASIL AKHIR (SETELAH 5 LEVEL SELESAI)
+         ===================================================================== -->
+    <div id="finalResultScreen" class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-sky-950/60 backdrop-blur-sm overflow-y-auto">
+        <div class="bg-white border-4 border-amber-400 rounded-3xl shadow-2xl max-w-lg w-full p-6 sm:p-8 text-center animate-pop-in my-auto">
+            <div class="text-5xl sm:text-6xl mb-2">👑🌟🦜</div>
+            <span class="inline-block bg-emerald-100 text-emerald-800 text-xs font-extrabold px-3 py-1 rounded-full mb-2">
+                MISI PENJAGA TAMAN BURUNG SELESAI!
+            </span>
+            <h2 id="finalAppreciationTitle" class="text-2xl sm:text-3xl font-arcade font-bold text-sky-800 mb-2 leading-tight">
+                MasyaAllah, Hebat Sekali!
+            </h2>
+            <p id="finalAppreciationText" class="text-sm sm:text-base font-bold text-slate-600 mb-5 leading-relaxed">
+                Kamu telah menyelesaikan semua level Surat Al-Fatihah dengan luar biasa!
+            </p>
+
+            <!-- Kartu Skor Akhir & Bintang -->
+            <div class="bg-gradient-to-br from-amber-50 to-orange-50 border-2 border-amber-300 rounded-2xl p-4 mb-6 shadow-inner">
+                <div id="finalStars" class="text-3xl sm:text-4xl mb-1 tracking-widest">⭐⭐⭐⭐⭐</div>
+                <div class="text-xs font-extrabold text-amber-800 uppercase">Skor Akhir Kamu</div>
+                <div id="finalTotalScore" class="text-4xl sm:text-5xl font-black text-emerald-600 my-1">1500</div>
+                <div id="finalAccuracyText" class="text-xs font-bold text-slate-600">
+                    Jawaban Benar: 15 dari 15 Soal
+                </div>
+            </div>
+
+            <div class="flex flex-col sm:flex-row gap-3">
+                <button onclick="restartWholeGame()" 
+                    class="btn-arcade flex-1 py-3.5 px-6 rounded-2xl bg-gradient-to-b from-amber-400 to-orange-500 text-white font-arcade font-bold text-lg sm:text-xl border-2 border-amber-300">
+                    🔄 Main Lagi (Ulang Permainan)
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notifikasi Kecil (Pengganti alert) -->
+    <div id="toastNotification" class="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 hidden bg-slate-900/90 text-white text-xs sm:text-sm font-bold px-4 py-2.5 rounded-full shadow-xl border border-slate-700 transition-opacity">
+        Pesan sistem
+    </div>
+
+    <script>
+        /**
+         * ============================================================================
+         * 1. BANK SOAL AL-QUR'AN HADIS KELAS 1 MI – MATERI SURAT AL-FATIHAH
+         *    5 Level, masing-masing 3 soal:
+         *    - Soal 1: LOTS (Mengingat / Memahami Dasar)
+         *    - Soal 2: MOTS (Menerapkan / Menghubungkan Ayat & Arti)
+         *    - Soal 3: HOTS (Menganalisis / Kontekstual Kehidupan Sehari-hari)
+         * ============================================================================
+         */
+        const GAME_LEVELS = [
+            {
+                level: 1,
+                title: "Mengenal Surat Al-Fatihah",
+                questions: [
+                    {
+                        type: "LOTS",
+                        question: "Berapa jumlah ayat dalam Surat Al-Fatihah?",
+                        options: ["7 Ayat", "5 Ayat", "6 Ayat", "4 Ayat"],
+                        correctIndex: 0,
+                        explanation: "Surat Al-Fatihah memiliki 7 ayat. Karena itu, Surat Al-Fatihah juga disebut As-Sab'ul Matsani (tujuh ayat yang diulang-ulang)."
+                    },
+                    {
+                        type: "MOTS",
+                        question: "Surat Al-Fatihah adalah surat pembuka dalam Al-Qur'an. Apa arti kata 'Al-Fatihah'?",
+                        options: ["Pembukaan", "Pertolongan", "Manusia", "Waktu Subuh"],
+                        correctIndex: 0,
+                        explanation: "Al-Fatihah artinya 'Pembukaan', karena surat ini berada di urutan pertama dan membuka kitab suci Al-Qur'an."
+                    },
+                    {
+                        type: "HOTS",
+                        question: "Aisyah hendak makan siang bersama keluarga. Bacaan pembuka dari ayat pertama Al-Fatihah yang harus ia baca adalah...",
+                        options: ["Bismillahirrahmanirrahim", "Alhamdulillahirabbil 'alamin", "Astaghfirullahal 'azhim", "Subhanallah"],
+                        correctIndex: 0,
+                        explanation: "Sebelum makan atau memulai kegiatan baik, kita membaca Basmalah (Bismillahirrahmanirrahim) agar mendapat berkah dari Allah."
+                    }
+                ]
+            },
+            {
+                level: 2,
+                title: "Tempat Turun & Pujian Kepada Allah",
+                questions: [
+                    {
+                        type: "LOTS",
+                        question: "Di kota manakah Surat Al-Fatihah diturunkan kepada Nabi Muhammad saw.?",
+                        options: ["Kota Makkah", "Kota Madinah", "Kota Palestina", "Kota Mesir"],
+                        correctIndex: 0,
+                        explanation: "Surat Al-Fatihah diturunkan di Kota Makkah sebelum Nabi hijrah, sehingga termasuk golongan Surat Makkiyah."
+                    },
+                    {
+                        type: "MOTS",
+                        question: "Lanjutkan bunyi ayat kedua Surat Al-Fatihah: 'Alhamdu lillahi rabbil ...'",
+                        options: ["'alamin", "nas", "falaq", "kabir"],
+                        correctIndex: 0,
+                        explanation: "Bunyi ayat kedua adalah 'Alhamdu lillahi rabbil 'alamin' yang artinya: Segala puji bagi Allah, Tuhan seluruh alam."
+                    },
+                    {
+                        type: "HOTS",
+                        question: "Ali mendapat nilai 100 saat ulangan Al-Qur'an Hadis. Kalimat pujian kepada Allah sesuai ayat ke-2 Al-Fatihah yang diucapkan Ali adalah...",
+                        options: ["Alhamdulillah", "Innalillahi", "Bismillah", "Allahu Akbar"],
+                        correctIndex: 0,
+                        explanation: "Saat mendapat nikmat, hadiah, atau nilai bagus, kita bersyukur kepada Allah dengan mengucapkan 'Alhamdulillah' (Segala puji bagi Allah)."
+                    }
+                ]
+            },
+            {
+                level: 3,
+                title: "Sifat Kasih Sayang Allah",
+                questions: [
+                    {
+                        type: "LOTS",
+                        question: "Dalam ayat ke-3 Surat Al-Fatihah terdapat bacaan 'Ar-Rahmanir-Rahim'. Apa arti 'Ar-Rahman'?",
+                        options: ["Maha Pengasih", "Maha Pencipta", "Maha Melihat", "Maha Mendengar"],
+                        correctIndex: 0,
+                        explanation: "Ar-Rahman artinya Allah Maha Pengasih kepada semua makhluk-Nya di dunia, sedangkan Ar-Rahim artinya Maha Penyayang."
+                    },
+                    {
+                        type: "MOTS",
+                        question: "Perhatikan ayat ke-4: 'Maliki yaumid-din'. Ayat ini menjelaskan bahwa Allah adalah Penguasa pada hari...",
+                        options: ["Pembalasan / Kiamat", "Libur Sekolah", "Ulang Tahun", "Kelahiran"],
+                        correctIndex: 0,
+                        explanation: "'Maliki yaumid-din' artinya Pemilik (Penguasa) hari pembalasan. Semua perbuatan baik dan buruk akan dibalas oleh Allah."
+                    },
+                    {
+                        type: "HOTS",
+                        question: "Fatimah melihat seekor kucing kecil kehausan di halaman madrasah lalu memberinya minum. Sikap Fatimah meneladani sifat Allah yaitu...",
+                        options: ["Ar-Rahman Ar-Rahim", "Maliki Yaumid-din", "Iyyaka Na'budu", "Siratal Mustaqim"],
+                        correctIndex: 0,
+                        explanation: "Menyayangi hewan, teman, dan sesama makhluk adalah cara kita meneladani sifat Allah Ar-Rahman Ar-Rahim (Maha Pengasih lagi Maha Penyayang)."
+                    }
+                ]
+            },
+            {
+                level: 4,
+                title: "Beribadah & Memohon Pertolongan",
+                questions: [
+                    {
+                        type: "LOTS",
+                        question: "Surat Al-Fatihah wajib dibaca umat Islam setiap hari ketika melaksanakan ibadah...",
+                        options: ["Salat", "Puasa", "Zakat", "Tidur"],
+                        correctIndex: 0,
+                        explanation: "Membaca Surat Al-Fatihah adalah salah satu rukun salat. Salat tidak sah jika tidak membaca Surat Al-Fatihah."
+                    },
+                    {
+                        type: "MOTS",
+                        question: "Lengkapilah ayat ke-5 Surat Al-Fatihah: 'Iyyaka na'budu wa iyyaka ...'",
+                        options: ["nasta'in", "mustaqim", "rahim", "alamin"],
+                        correctIndex: 0,
+                        explanation: "Bunyinya adalah 'Iyyaka na'budu wa iyyaka nasta'in' yang artinya: Hanya kepada Engkaulah kami menyembah dan hanya kepada Engkaulah kami mohon pertolongan."
+                    },
+                    {
+                        type: "HOTS",
+                        question: "Umar merasa kesulitan saat belajar membaca huruf hijaiyah. Sesuai ayat 'Iyyaka na'budu wa iyyaka nasta'in', kepada siapa Umar berdoa memohon pertolongan?",
+                        options: ["Hanya kepada Allah Swt.", "Kepada jimat atau benda", "Kepada pohon besar", "Tidak mau berusaha"],
+                        correctIndex: 0,
+                        explanation: "Sebagai anak muslim yang beriman, kita berusaha sungguh-sungguh dan berdoa memohon pertolongan hanya kepada Allah Swt."
+                    }
+                ]
+            },
+            {
+                level: 5,
+                title: "Memohon Jalan yang Lurus",
+                questions: [
+                    {
+                        type: "LOTS",
+                        question: "Apa bunyi doa yang kita ucapkan setelah selesai membaca Surat Al-Fatihah?",
+                        options: ["Aamiin", "Subhanallah", "Allahu Akbar", "Assalamu'alaikum"],
+                        correctIndex: 0,
+                        explanation: "Setelah selesai membaca ayat terakhir Surat Al-Fatihah, kita mengucapkan 'Aamiin' yang artinya: Kabulkanlah doa kami ya Allah."
+                    },
+                    {
+                        type: "MOTS",
+                        question: "Pada ayat ke-6: 'Ihdinas-siratal mustaqim'. Kita memohon kepada Allah agar ditunjukkan jalan yang...",
+                        options: ["Lurus", "Berliku", "Gelap", "Jauh"],
+                        correctIndex: 0,
+                        explanation: "'Ihdinas-siratal mustaqim' artinya: Tunjukilah kami jalan yang lurus, yaitu jalan agama Islam yang diridai Allah."
+                    },
+                    {
+                        type: "HOTS",
+                        question: "Zaid menemukan uang jajan milik temannya yang jatuh di kelas. Agar tetap berada di 'Siratal Mustaqim' (jalan lurus/benar), apa yang sebaiknya Zaid lakukan?",
+                        options: ["Mengembalikannya kepada teman", "Menyimpannya di saku diam-diam", "Memakainya untuk jajan", "Membuangnya ke tempat sampah"],
+                        correctIndex: 0,
+                        explanation: "Bersikap jujur dan mengembalikan barang milik teman adalah perbuatan terpuji orang yang berada di jalan lurus (Siratal Mustaqim)."
+                    }
+                ]
+            }
+        ];
+
+        /**
+         * ============================================================================
+         * 2. STATE & KONFIGURASI PERMAINAN
+         * ============================================================================
+         */
+        const state = {
+            playerName: "Penjaga Cilik",
+            unlockedLevel: 1,       // Level terbuka bertahap (1 s/d 5)
+            selectedStartLevel: 1,  // Level yang dipilih di menu
+            currentLevelIndex: 0,   // Index 0..4
+            currentQuestionIndex: 0,// Index 0..2
+            score: 0,
+            correctCount: 0,
+            totalAnswered: 0,
+            timer: 45,
+            timerInterval: null,
+            isPlaying: false,
+            isQuestionActive: false,
+            lastActionWasCorrect: false,
+            
+            // Kamera & Retikel
+            cameraEnabled: false,
+            cameraStreamReady: false,
+            reticleX: window.innerWidth / 2,
+            reticleY: window.innerHeight / 2,
+            isPinching: false,
+            lastPinchTime: 0,
+            pinchCooldown: 850 // ms agar tidak double shot tak sengaja
+        };
+
+        // Warna Balon Ceria untuk 4 Pilihan Jawaban
+        const BALLOON_THEMES = [
+            { fill: "#ef4444", highlight: "#fca5a5", dark: "#b91c1c", border: "#fef2f2" }, // Merah Cerah
+            { fill: "#3b82f6", highlight: "#93c5fd", dark: "#1d4ed8", border: "#eff6ff" }, // Biru Langit
+            { fill: "#f59e0b", highlight: "#fcd34d", dark: "#b45309", border: "#fffbeb" }, // Oranye Emas
+            { fill: "#a855f7", highlight: "#d8b4fe", dark: "#7e22ce", border: "#faf5ff" }  // Ungu Ceria
+        ];
+
+        // Objek Visual di Canvas
+        let balloons = [];
+        let particles = [];
+        let birds = [];
+        let clouds = [];
+        let flowers = [];
+
+        /**
+         * ============================================================================
+         * 3. WEB AUDIO API (EFEK SUARA SINTETIS TANPA FILE EKSTERNAL)
+         * ============================================================================
+         */
+        let audioCtx = null;
+        function ensureAudioContext() {
+            if (!audioCtx) {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                if (AudioContext) audioCtx = new AudioContext();
+            }
+            if (audioCtx && audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+
+        function playSound(type) {
+            try {
+                ensureAudioContext();
+                if (!audioCtx) return;
+
+                const now = audioCtx.currentTime;
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+
+                if (type === 'pop') {
+                    // Suara balon pecah ("Pop!")
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(320, now);
+                    osc.frequency.exponentialRampToValueAtTime(950, now + 0.08);
+                    osc.frequency.exponentialRampToValueAtTime(120, now + 0.16);
+                    gain.gain.setValueAtTime(0.35, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.16);
+                    osc.start(now);
+                    osc.stop(now + 0.17);
+                } else if (type === 'correct') {
+                    // Nada ceria naik (C5 - E5 - G5 - C6)
+                    const notes = [523.25, 659.25, 783.99, 1046.50];
+                    notes.forEach((freq, idx) => {
+                        const o = audioCtx.createOscillator();
+                        const g = audioCtx.createGain();
+                        o.type = 'triangle';
+                        o.connect(g);
+                        g.connect(audioCtx.destination);
+                        o.frequency.setValueAtTime(freq, now + idx * 0.08);
+                        g.gain.setValueAtTime(0.25, now + idx * 0.08);
+                        g.gain.exponentialRampToValueAtTime(0.01, now + idx * 0.08 + 0.25);
+                        o.start(now + idx * 0.08);
+                        o.stop(now + idx * 0.08 + 0.26);
+                    });
+                } else if (type === 'wrong') {
+                    // Nada lembut turun ("Boing" ramah anak)
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(300, now);
+                    osc.frequency.linearRampToValueAtTime(210, now + 0.25);
+                    gain.gain.setValueAtTime(0.25, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.28);
+                    osc.start(now);
+                    osc.stop(now + 0.3);
+                } else if (type === 'win') {
+                    // Fanfare kemenangan level
+                    const melody = [523.25, 659.25, 783.99, 1046.50, 783.99, 1046.50];
+                    melody.forEach((freq, i) => {
+                        const o = audioCtx.createOscillator();
+                        const g = audioCtx.createGain();
+                        o.type = 'sine';
+                        o.connect(g);
+                        g.connect(audioCtx.destination);
+                        o.frequency.setValueAtTime(freq, now + i * 0.11);
+                        g.gain.setValueAtTime(0.25, now + i * 0.11);
+                        g.gain.exponentialRampToValueAtTime(0.01, now + i * 0.11 + 0.3);
+                        o.start(now + i * 0.11);
+                        o.stop(now + i * 0.11 + 0.32);
+                    });
+                }
+            } catch (e) {
+                // Abaikan jika audio diblokir browser
+            }
+        }
+
+        // Fitur Text-to-Speech Bahasa Indonesia (Membantu siswa kelas 1 MI)
+        function speakCurrentQuestion() {
+            if (!('speechSynthesis' in window)) {
+                showToast("Browser ini tidak mendukung pembaca suara.");
+                return;
+            }
+            window.speechSynthesis.cancel();
+            const qObj = GAME_LEVELS[state.currentLevelIndex].questions[state.currentQuestionIndex];
+            const textToRead = `${qObj.question}. Pilihannya adalah: ${qObj.options.join(', ')}.`;
+            const utterance = new SpeechSynthesisUtterance(textToRead);
+            utterance.lang = 'id-ID';
+            utterance.rate = 0.92; // Sedikit lebih lambat agar jelas untuk anak kelas 1
+            utterance.pitch = 1.1;
+            window.speechSynthesis.speak(utterance);
+        }
+
+        function showToast(msg) {
+            const toast = document.getElementById('toastNotification');
+            toast.textContent = msg;
+            toast.classList.remove('hidden');
+            clearTimeout(toast._timeout);
+            toast._timeout = setTimeout(() => {
+                toast.classList.add('hidden');
+            }, 3000);
+        }
+
+        /**
+         * ============================================================================
+         * 4. INISIALISASI CANVAS & ELEMEN TAMAN FANTASI (AWAN, BUKIT, POHON, BURUNG)
+         * ============================================================================
+         */
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            initGardenScenery();
+            if (state.isQuestionActive && balloons.length > 0) {
+                repositionBalloons();
+            }
+        }
+        window.addEventListener('resize', resizeCanvas);
+
+        function initGardenScenery() {
+            const w = canvas.width;
+            const h = canvas.height;
+
+            // Awan lembut
+            clouds = [];
+            const cloudCount = Math.max(4, Math.floor(w / 260));
+            for (let i = 0; i < cloudCount; i++) {
+                clouds.push({
+                    x: (w / cloudCount) * i + Math.random() * 80,
+                    y: 45 + Math.random() * (h * 0.22),
+                    scale: 0.65 + Math.random() * 0.55,
+                    speed: 0.18 + Math.random() * 0.22
+                });
+            }
+
+            // Burung kartun lucu terbang di latar belakang
+            birds = [];
+            const birdColors = [
+                { body: "#fbbf24", wing: "#f59e0b", belly: "#fef3c7" }, // Burung Kenari Kuning
+                { body: "#38bdf8", wing: "#0284c7", belly: "#e0f2fe" }, // Burung Biru
+                { body: "#fb7185", wing: "#e11d48", belly: "#ffe4e6" }, // Burung Merah Muda
+                { body: "#a3e635", wing: "#65a30d", belly: "#ecfccb" }  // Burung Hijau Lime
+            ];
+            for (let i = 0; i < 6; i++) {
+                const dir = i % 2 === 0 ? 1 : -1;
+                const theme = birdColors[i % birdColors.length];
+                birds.push({
+                    x: Math.random() * w,
+                    y: 110 + Math.random() * (h * 0.45),
+                    speedX: (1.1 + Math.random() * 1.1) * dir,
+                    baseY: 110 + Math.random() * (h * 0.45),
+                    waveOffset: Math.random() * Math.PI * 2,
+                    wingPhase: Math.random() * Math.PI * 2,
+                    size: 16 + Math.random() * 8,
+                    theme: theme
+                });
+            }
+
+            // Bunga-bunga di padang rumput
+            flowers = [];
+            const flowerColors = ["#f43f5e", "#facc15", "#a855f7", "#fb923c", "#ffffff"];
+            const flowerCount = Math.floor(w / 45);
+            for (let i = 0; i < flowerCount; i++) {
+                flowers.push({
+                    x: i * 45 + Math.random() * 25,
+                    y: h - 25 - Math.random() * 55,
+                    color: flowerColors[i % flowerColors.length],
+                    size: 5 + Math.random() * 4
+                });
+            }
+        }
+
+        function drawGardenBackground(time) {
+            const w = canvas.width;
+            const h = canvas.height;
+
+            // 1. Gradasi Langit Biru Cerah
+            const skyGrad = ctx.createLinearGradient(0, 0, 0, h * 0.85);
+            skyGrad.addColorStop(0, "#0ea5e9");
+            skyGrad.addColorStop(0.55, "#7dd3fc");
+            skyGrad.addColorStop(1, "#e0f2fe");
+            ctx.fillStyle = skyGrad;
+            ctx.fillRect(0, 0, w, h);
+
+            // 2. Matahari Tersenyum di Sudut Kiri Atas
+            const sunX = Math.min(110, w * 0.12);
+            const sunY = Math.min(105, h * 0.14);
+            ctx.save();
+            ctx.translate(sunX, sunY);
+            // Sinar matahari berputar lembut
+            ctx.rotate(time * 0.0003);
+            ctx.fillStyle = "rgba(253, 224, 71, 0.35)";
+            for (let i = 0; i < 12; i++) {
+                ctx.rotate(Math.PI / 6);
+                ctx.beginPath();
+                ctx.moveTo(0, 0);
+                ctx.lineTo(-10, 68);
+                ctx.lineTo(10, 68);
+                ctx.closePath();
+                ctx.fill();
+            }
+            ctx.restore();
+
+            ctx.beginPath();
+            ctx.arc(sunX, sunY, 38, 0, Math.PI * 2);
+            ctx.fillStyle = "#facc15";
+            ctx.fill();
+            ctx.lineWidth = 4;
+            ctx.strokeStyle = "#fef08a";
+            ctx.stroke();
+
+            // 3. Awan Bergerak
+            clouds.forEach(c => {
+                c.x += c.speed;
+                if (c.x > w + 120) c.x = -120;
+                drawCloud(c.x, c.y, c.scale);
+            });
+
+            // 4. Bukit Hijau Berlapis
+            // Bukit Belakang
+            ctx.fillStyle = "#4ade80";
+            ctx.beginPath();
+            ctx.moveTo(0, h);
+            ctx.lineTo(0, h - 135);
+            ctx.quadraticCurveTo(w * 0.28, h - 220, w * 0.58, h - 130);
+            ctx.quadraticCurveTo(w * 0.82, h - 75, w, h - 150);
+            ctx.lineTo(w, h);
+            ctx.closePath();
+            ctx.fill();
+
+            // Bukit Depan
+            const grassGrad = ctx.createLinearGradient(0, h - 130, 0, h);
+            grassGrad.addColorStop(0, "#22c55e");
+            grassGrad.addColorStop(1, "#15803d");
+            ctx.fillStyle = grassGrad;
+            ctx.beginPath();
+            ctx.moveTo(0, h);
+            ctx.lineTo(0, h - 90);
+            ctx.quadraticCurveTo(w * 0.35, h - 45, w * 0.68, h - 105);
+            ctx.quadraticCurveTo(w * 0.88, h - 135, w, h - 85);
+            ctx.lineTo(w, h);
+            ctx.closePath();
+            ctx.fill();
+
+            // 5. Pepohonan Kartun Rindang di Kiri dan Kanan
+            drawCartoonTree(55, h - 85, 0.95);
+            if (w > 640) {
+                drawCartoonTree(w - 65, h - 80, 1.05);
+                drawCartoonTree(165, h - 105, 0.65);
+            }
+
+            // 6. Bunga-bunga Taman
+            flowers.forEach(f => {
+                drawFlower(f.x, f.y, f.size, f.color);
+            });
+
+            // 7. Burung-Burung Kartun Lucu Terbang
+            birds.forEach(b => {
+                b.x += b.speedX;
+                b.wingPhase += 0.18;
+                const bobY = Math.sin(time * 0.004 + b.waveOffset) * 14;
+                const currentY = b.baseY + bobY;
+
+                if (b.speedX > 0 && b.x > w + 50) b.x = -50;
+                if (b.speedX < 0 && b.x < -50) b.x = w + 50;
+
+                drawCartoonBird(b.x, currentY, b.size, b.speedX > 0, b.wingPhase, b.theme);
+            });
+        }
+
+        function drawCloud(x, y, scale) {
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.scale(scale, scale);
+            ctx.fillStyle = "rgba(255, 255, 255, 0.92)";
+            ctx.beginPath();
+            ctx.arc(0, 0, 28, 0, Math.PI * 2);
+            ctx.arc(25, -10, 34, 0, Math.PI * 2);
+            ctx.arc(55, -4, 28, 0, Math.PI * 2);
+            ctx.arc(75, 8, 22, 0, Math.PI * 2);
+            ctx.arc(-22, 8, 22, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        }
+
+        function drawCartoonTree(x, y, scale) {
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.scale(scale, scale);
+            // Batang Pohon
+            ctx.fillStyle = "#92400e";
+            ctx.beginPath();
+            ctx.roundRect(-12, -55, 24, 70, 6);
+            ctx.fill();
+            // Daun Rindang
+            ctx.fillStyle = "#16a34a";
+            ctx.beginPath();
+            ctx.arc(-24, -65, 28, 0, Math.PI * 2);
+            ctx.arc(24, -65, 28, 0, Math.PI * 2);
+            ctx.arc(0, -90, 34, 0, Math.PI * 2);
+            ctx.fill();
+            // Highlight Daun
+            ctx.fillStyle = "#4ade80";
+            ctx.beginPath();
+            ctx.arc(-8, -96, 18, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        }
+
+        function drawFlower(x, y, size, color) {
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.fillStyle = color;
+            for (let i = 0; i < 5; i++) {
+                ctx.rotate((Math.PI * 2) / 5);
+                ctx.beginPath();
+                ctx.arc(0, size, size * 0.55, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.fillStyle = "#facc15";
+            ctx.beginPath();
+            ctx.arc(0, 0, size * 0.45, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        }
+
+        function drawCartoonBird(x, y, size, facingRight, wingPhase, theme) {
+            ctx.save();
+            ctx.translate(x, y);
+            if (!facingRight) ctx.scale(-1, 1);
+
+            // Ekor
+            ctx.fillStyle = theme.wing;
+            ctx.beginPath();
+            ctx.moveTo(-size * 0.8, 0);
+            ctx.lineTo(-size * 1.45, -size * 0.4);
+            ctx.lineTo(-size * 1.35, size * 0.35);
+            ctx.closePath();
+            ctx.fill();
+
+            // Badan Bulat Lucu
+            ctx.fillStyle = theme.body;
+            ctx.beginPath();
+            ctx.ellipse(0, 0, size, size * 0.78, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Perut Cerah
+            ctx.fillStyle = theme.belly;
+            ctx.beginPath();
+            ctx.arc(size * 0.2, size * 0.18, size * 0.5, 0, Math.PI);
+            ctx.fill();
+
+            // Paruh Oranye
+            ctx.fillStyle = "#f97316";
+            ctx.beginPath();
+            ctx.moveTo(size * 0.9, -size * 0.15);
+            ctx.lineTo(size * 1.38, 0);
+            ctx.lineTo(size * 0.9, size * 0.18);
+            ctx.closePath();
+            ctx.fill();
+
+            // Mata Kartun Besar
+            ctx.fillStyle = "#ffffff";
+            ctx.beginPath();
+            ctx.arc(size * 0.48, -size * 0.2, size * 0.26, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = "#0f172a";
+            ctx.beginPath();
+            ctx.arc(size * 0.54, -size * 0.2, size * 0.13, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Sayap Mengepak
+            const wingFlap = Math.sin(wingPhase) * (size * 0.45);
+            ctx.fillStyle = theme.wing;
+            ctx.beginPath();
+            ctx.ellipse(-size * 0.1, 0, size * 0.52, Math.abs(wingFlap) + size * 0.22, wingFlap > 0 ? -0.3 : 0.3, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.restore();
+        }
+
+        /**
+         * ============================================================================
+         * 5. LOGIKA BALON TARGET & ANIMASI PECAH (PARTIKEL KONFETI)
+         * ============================================================================
+         */
+        function spawnBalloonsForQuestion(questionObj) {
+            balloons = [];
+            const w = canvas.width;
+            const h = canvas.height;
+            const count = questionObj.options.length; // 4 pilihan
+
+            // Hitung area aman agar balon tidak tertutup HUD atas atau tepi bawah
+            const topSafe = Math.min(235, h * 0.33);
+            const bottomSafe = h - 110;
+            const usableHeight = Math.max(180, bottomSafe - topSafe);
+
+            const isMobile = w < 640;
+            const radiusX = isMobile ? Math.min(76, w * 0.20) : Math.min(108, w * 0.11);
+            const radiusY = isMobile ? 54 : 74;
+
+            questionObj.options.forEach((optText, idx) => {
+                let baseX, baseY;
+                if (isMobile) {
+                    // Tata letak 2x2 di layar ponsel agar luas dan mudah dibidik
+                    const col = idx % 2;
+                    const row = Math.floor(idx / 2);
+                    baseX = w * (col === 0 ? 0.28 : 0.72);
+                    baseY = topSafe + usableHeight * (row === 0 ? 0.28 : 0.76);
+                } else {
+                    // Tata letak 4 kolom melengkung indah di layar tablet/desktop
+                    const spacing = w / (count + 1);
+                    baseX = spacing * (idx + 1);
+                    const archOffset = (idx === 1 || idx === 2) ? -18 : 18;
+                    baseY = topSafe + usableHeight * 0.52 + archOffset;
+                }
+
+                balloons.push({
+                    index: idx,
+                    text: optText,
+                    baseX: baseX,
+                    baseY: baseY,
+                    x: baseX,
+                    y: baseY,
+                    radiusX: radiusX,
+                    radiusY: radiusY,
+                    floatPhase: idx * 1.4,
+                    floatSpeed: 0.025 + Math.random() * 0.01,
+                    swayAmpX: isMobile ? 10 : 18,
+                    swayAmpY: isMobile ? 10 : 16,
+                    theme: BALLOON_THEMES[idx % BALLOON_THEMES.length],
+                    popped: false,
+                    scale: 0.1 // Animasi membesar saat muncul
+                });
+            });
+        }
+
+        function repositionBalloons() {
+            const w = canvas.width;
+            const h = canvas.height;
+            const topSafe = Math.min(235, h * 0.33);
+            const bottomSafe = h - 110;
+            const usableHeight = Math.max(180, bottomSafe - topSafe);
+            const isMobile = w < 640;
+
+            balloons.forEach((b, idx) => {
+                b.radiusX = isMobile ? Math.min(76, w * 0.20) : Math.min(108, w * 0.11);
+                b.radiusY = isMobile ? 54 : 74;
+                if (isMobile) {
+                    const col = idx % 2;
+                    const row = Math.floor(idx / 2);
+                    b.baseX = w * (col === 0 ? 0.28 : 0.72);
+                    b.baseY = topSafe + usableHeight * (row === 0 ? 0.28 : 0.76);
+                } else {
+                    const spacing = w / (balloons.length + 1);
+                    b.baseX = spacing * (idx + 1);
+                    const archOffset = (idx === 1 || idx === 2) ? -18 : 18;
+                    b.baseY = topSafe + usableHeight * 0.52 + archOffset;
+                }
+            });
+        }
+
+        function updateAndDrawBalloons() {
+            let anyHovered = false;
+
+            balloons.forEach(b => {
+                if (b.popped) return;
+
+                // Animasi pop-in saat baru muncul
+                if (b.scale < 1) {
+                    b.scale = Math.min(1, b.scale + 0.08);
+                }
+
+                // Gerakan melayang lembut
+                b.floatPhase += b.floatSpeed;
+                b.x = b.baseX + Math.cos(b.floatPhase * 0.8) * b.swayAmpX;
+                b.y = b.baseY + Math.sin(b.floatPhase) * b.swayAmpY;
+
+                // Cek apakah retikel sedang membidik balon ini
+                const isTargeted = isPointInsideBalloon(state.reticleX, state.reticleY, b);
+                if (isTargeted) anyHovered = true;
+
+                ctx.save();
+                ctx.translate(b.x, b.y);
+                const hoverScale = isTargeted ? 1.07 : 1.0;
+                ctx.scale(b.scale * hoverScale, b.scale * hoverScale);
+
+                // 1. Tali Balon Bergoyang
+                ctx.beginPath();
+                ctx.moveTo(0, b.radiusY + 6);
+                ctx.quadraticCurveTo(Math.sin(b.floatPhase) * 12, b.radiusY + 35, 0, b.radiusY + 68);
+                ctx.strokeStyle = "rgba(255, 255, 255, 0.85)";
+                ctx.lineWidth = 3;
+                ctx.stroke();
+
+                // 2. Segitiga Ikatan Bawah Balon
+                ctx.fillStyle = b.theme.dark;
+                ctx.beginPath();
+                ctx.moveTo(-8, b.radiusY + 8);
+                ctx.lineTo(8, b.radiusY + 8);
+                ctx.lineTo(0, b.radiusY - 2);
+                ctx.closePath();
+                ctx.fill();
+
+                // 3. Badan Balon (Oval Lebar agar Teks Jawaban Jelas)
+                ctx.beginPath();
+                ctx.ellipse(0, 0, b.radiusX, b.radiusY, 0, 0, Math.PI * 2);
+                ctx.fillStyle = b.theme.fill;
+                ctx.fill();
+
+                // Border cahaya jika dibidik retikel
+                ctx.lineWidth = isTargeted ? 6 : 3.5;
+                ctx.strokeStyle = isTargeted ? "#fde047" : b.theme.border;
+                ctx.stroke();
+
+                // 4. Kilauan Balon (Glossy Highlight)
+                ctx.fillStyle = "rgba(255, 255, 255, 0.32)";
+                ctx.beginPath();
+                ctx.ellipse(-b.radiusX * 0.48, -b.radiusY * 0.42, b.radiusX * 0.18, b.radiusY * 0.28, -0.5, 0, Math.PI * 2);
+                ctx.fill();
+
+                // 5. Huruf Pilihan (A, B, C, D) di Atas Balon
+                const letters = ["A", "B", "C", "D"];
+                ctx.fillStyle = "#ffffff";
+                ctx.beginPath();
+                ctx.arc(0, -b.radiusY + 14, 13, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = b.theme.dark;
+                ctx.font = "900 13px 'Nunito', sans-serif";
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                ctx.fillText(letters[b.index], 0, -b.radiusY + 14.5);
+
+                // 6. Teks Jawaban di Tengah Balon (Multi-line wrap otomatis)
+                ctx.fillStyle = "#ffffff";
+                ctx.shadowColor = "rgba(0, 0, 0, 0.35)";
+                ctx.shadowBlur = 4;
+                ctx.shadowOffsetY = 2;
+                const fontSize = canvas.width < 640 ? 13 : 16;
+                ctx.font = `800 ${fontSize}px 'Nunito', sans-serif`;
+                drawWrappedText(ctx, b.text, 0, 6, b.radiusX * 1.65, fontSize + 4);
+
+                ctx.restore();
+            });
+
+            // Ubah gaya visual retikel saat mengunci target
+            const reticleEl = document.getElementById('reticle');
+            if (anyHovered && state.isQuestionActive) {
+                reticleEl.classList.add('reticle-locked');
+            } else {
+                reticleEl.classList.remove('reticle-locked');
+            }
+        }
+
+        function drawWrappedText(context, text, x, y, maxWidth, lineHeight) {
+            const words = text.split(' ');
+            let lines = [];
+            let currentLine = words[0];
+
+            for (let i = 1; i < words.length; i++) {
+                const word = words[i];
+                const width = context.measureText(currentLine + " " + word).width;
+                if (width < maxWidth) {
+                    currentLine += " " + word;
+                } else {
+                    lines.push(currentLine);
+                    currentLine = word;
+                }
+            }
+            lines.push(currentLine);
+
+            const totalHeight = lines.length * lineHeight;
+            let startY = y - (totalHeight / 2) + (lineHeight / 2);
+
+            lines.forEach((line, idx) => {
+                context.fillText(line, x, startY + idx * lineHeight);
+            });
+        }
+
+        function isPointInsideBalloon(px, py, balloon) {
+            if (balloon.popped) return false;
+            const dx = (px - balloon.x) / (balloon.radiusX * 1.08);
+            const dy = (py - balloon.y) / (balloon.radiusY * 1.08);
+            return (dx * dx + dy * dy) <= 1.0;
+        }
+
+        // Efek Ledakan Konfeti Saat Balon Pecah
+        function createPopExplosion(x, y, mainColor) {
+            const colors = [mainColor, "#facc15", "#ffffff", "#4ade80", "#38bdf8", "#f472b6"];
+            for (let i = 0; i < 36; i++) {
+                const angle = (Math.PI * 2 * i) / 36 + (Math.random() - 0.5) * 0.3;
+                const speed = 3 + Math.random() * 7;
+                particles.push({
+                    x: x,
+                    y: y,
+                    vx: Math.cos(angle) * speed,
+                    vy: Math.sin(angle) * speed - 2,
+                    size: 5 + Math.random() * 6,
+                    color: colors[i % colors.length],
+                    alpha: 1,
+                    rotation: Math.random() * Math.PI * 2,
+                    rotSpeed: (Math.random() - 0.5) * 0.25
+                });
+            }
+        }
+
+        function updateAndDrawParticles() {
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.vy += 0.22; // Gravitasi ringan
+                p.alpha -= 0.022;
+                p.rotation += p.rotSpeed;
+
+                if (p.alpha <= 0) {
+                    particles.splice(i, 1);
+                    continue;
+                }
+
+                ctx.save();
+                ctx.globalAlpha = p.alpha;
+                ctx.translate(p.x, p.y);
+                ctx.rotate(p.rotation);
+                ctx.fillStyle = p.color;
+                ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.65);
+                ctx.restore();
+            }
+        }
+
+        // Loop Animasi Utama
+        function gameLoop(timestamp) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawGardenBackground(timestamp);
+
+            if (state.isPlaying) {
+                updateAndDrawBalloons();
+            }
+            updateAndDrawParticles();
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        /**
+         * ============================================================================
+         * 6. KONTROL MEDIAPIPE HANDS (KAMERA GESTURE) + MOUSE & TOUCH
+         * ============================================================================
+         */
+        let mpHands = null;
+        let mpCamera = null;
+        const videoElement = document.getElementById('inputVideo');
+        const handCanvas = document.getElementById('outputHandCanvas');
+        const handCtx = handCanvas.getContext('2d');
+
+        async function toggleCameraGesture() {
+            ensureAudioContext();
+            if (state.cameraEnabled) {
+                disableCameraGesture();
+            } else {
+                await enableCameraGesture();
+            }
+        }
+
+        async function enableCameraGesture() {
+            const statusText = document.getElementById('cameraStatusText');
+            const btnStart = document.getElementById('btnActivateCameraStart');
+            const hudLabel = document.getElementById('hudCameraLabel');
+
+            try {
+                if (statusText) statusText.textContent = "Status: Meminta izin kamera & memuat AI tangan...";
+                if (btnStart) btnStart.disabled = true;
+
+                if (!mpHands) {
+                    mpHands = new Hands({
+                        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+                    });
+                    mpHands.setOptions({
+                        maxNumHands: 1,
+                        modelComplexity: 1,
+                        minDetectionConfidence: 0.65,
+                        minTrackingConfidence: 0.6
+                    });
+                    mpHands.onResults(onHandResults);
+                }
+
+                if (!mpCamera) {
+                    mpCamera = new Camera(videoElement, {
+                        onFrame: async () => {
+                            if (state.cameraEnabled && mpHands) {
+                                await mpHands.send({ image: videoElement });
+                            }
+                        },
+                        width: 320,
+                        height: 240
+                    });
+                }
+
+                await mpCamera.start();
+                state.cameraEnabled = true;
+                state.cameraStreamReady = true;
+
+                document.getElementById('cameraPreviewBox').classList.remove('hidden');
+                if (statusText) statusText.textContent = "Status: AKTIF! Arahkan telunjuk & jepit (Pinch) untuk menembak.";
+                if (btnStart) {
+                    btnStart.disabled = false;
+                    btnStart.innerHTML = "✅ Kamera Aktif (Klik Matikan)";
+                    btnStart.classList.replace('from-sky-400', 'from-emerald-500');
+                    btnStart.classList.replace('to-sky-600', 'to-emerald-700');
+                }
+                if (hudLabel) hudLabel.textContent = "Kamera: ON";
+                showToast("📷 Kamera Gesture Aktif! Gerakkan telunjukmu.");
+            } catch (err) {
+                console.error("Gagal mengaktifkan kamera:", err);
+                state.cameraEnabled = false;
+                if (statusText) statusText.textContent = "Status: Kamera tidak tersedia/ditolak. Gunakan Mouse atau Sentuh layar!";
+                if (btnStart) {
+                    btnStart.disabled = false;
+                    btnStart.innerHTML = "🎥 Coba Aktifkan Kamera";
+                }
+                showToast("⚠️ Izin kamera tidak aktif. Kamu tetap bisa bermain pakai Mouse atau Sentuh!");
+            }
+        }
+
+        function disableCameraGesture() {
+            state.cameraEnabled = false;
+            try {
+                if (videoElement && videoElement.srcObject) {
+                    videoElement.srcObject.getTracks().forEach(track => track.stop());
+                    videoElement.srcObject = null;
+                }
+                mpCamera = null;
+            } catch (e) {}
+
+            document.getElementById('cameraPreviewBox').classList.add('hidden');
+            const statusText = document.getElementById('cameraStatusText');
+            const btnStart = document.getElementById('btnActivateCameraStart');
+            const hudLabel = document.getElementById('hudCameraLabel');
+
+            if (statusText) statusText.textContent = "Status: Nonaktif (Gunakan Mouse/Sentuh atau aktifkan kamera)";
+            if (btnStart) {
+                btnStart.innerHTML = "🎥 Aktifkan Kamera Gesture";
+                btnStart.classList.replace('from-emerald-500', 'from-sky-400');
+                btnStart.classList.replace('to-emerald-700', 'to-sky-600');
+            }
+            if (hudLabel) hudLabel.textContent = "Kamera: OFF";
+            showToast("📷 Kamera dimatikan. Mode Mouse / Sentuh aktif.");
+        }
+
+        function onHandResults(results) {
+            if (!state.cameraEnabled) return;
+
+            handCanvas.width = 320;
+            handCanvas.height = 240;
+            handCtx.save();
+            handCtx.clearRect(0, 0, handCanvas.width, handCanvas.height);
+            handCtx.drawImage(results.image, 0, 0, handCanvas.width, handCanvas.height);
+
+            const badge = document.getElementById('gestureBadge');
+
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                const landmarks = results.multiHandLandmarks[0];
+
+                // Gambar kerangka tangan di preview kamera mini
+                if (window.drawConnectors && window.HAND_CONNECTIONS) {
+                    drawConnectors(handCtx, landmarks, HAND_CONNECTIONS, { color: '#38bdf8', lineWidth: 3 });
+                }
+                if (window.drawLandmarks) {
+                    drawLandmarks(handCtx, landmarks, { color: '#facc15', lineWidth: 1, radius: 3 });
+                }
+
+                // Landmark 8 = Ujung Jari Telunjuk, Landmark 4 = Ujung Ibu Jari
+                const indexTip = landmarks[8];
+                const thumbTip = landmarks[4];
+
+                // Mirroring horizontal (1 - x) agar natural seperti cermin
+                const targetX = (1 - indexTip.x) * window.innerWidth;
+                const targetY = indexTip.y * window.innerHeight;
+
+                // Smoothing pergerakan retikel agar stabil untuk anak SD
+                state.reticleX += (targetX - state.reticleX) * 0.42;
+                state.reticleY += (targetY - state.reticleY) * 0.42;
+                updateReticlePosition();
+
+                // Hitung jarak Euclidean antara ujung jempol & telunjuk (Deteksi Pinch)
+                const dx = indexTip.x - thumbTip.x;
+                const dy = indexTip.y - thumbTip.y;
+                const distance = Math.hypot(dx, dy);
+
+                const reticleEl = document.getElementById('reticle');
+                if (distance < 0.058) {
+                    reticleEl.classList.add('reticle-pinching');
+                    badge.textContent = "🤏 PINCH! TEMBAK!";
+                    badge.className = "absolute bottom-1 left-1 right-1 text-center text-[10px] sm:text-xs font-extrabold px-2 py-0.5 rounded-full bg-rose-500 text-white shadow";
+
+                    const now = Date.now();
+                    if (!state.isPinching && (now - state.lastPinchTime > state.pinchCooldown)) {
+                        state.isPinching = true;
+                        state.lastPinchTime = now;
+                        triggerShootAt(state.reticleX, state.reticleY);
+                    }
+                } else {
+                    state.isPinching = false;
+                    reticleEl.classList.remove('reticle-pinching');
+                    badge.textContent = "☝️ Telunjuk Terdeteksi";
+                    badge.className = "absolute bottom-1 left-1 right-1 text-center text-[10px] sm:text-xs font-extrabold px-2 py-0.5 rounded-full bg-emerald-500 text-white shadow";
+                }
+            } else {
+                badge.textContent = "👋 Tunjukkan Tanganmu";
+                badge.className = "absolute bottom-1 left-1 right-1 text-center text-[10px] sm:text-xs font-extrabold px-2 py-0.5 rounded-full bg-amber-500 text-slate-950 shadow";
+            }
+            handCtx.restore();
+        }
+
+        function updateReticlePosition() {
+            const reticleEl = document.getElementById('reticle');
+            reticleEl.style.left = `${state.reticleX}px`;
+            reticleEl.style.top = `${state.reticleY}px`;
+        }
+
+        // Kontrol Alternatif: Mouse Move & Click
+        window.addEventListener('mousemove', (e) => {
+            if (!state.isPlaying) return;
+            // Jika kamera aktif dan tangan tidak terdeteksi, mouse tetap bisa membantu
+            state.reticleX = e.clientX;
+            state.reticleY = e.clientY;
+            updateReticlePosition();
+        });
+
+        canvas.addEventListener('click', (e) => {
+            if (!state.isPlaying || !state.isQuestionActive) return;
+            ensureAudioContext();
+            state.reticleX = e.clientX;
+            state.reticleY = e.clientY;
+            updateReticlePosition();
+            triggerShootAt(e.clientX, e.clientY);
+        });
+
+        // Kontrol Alternatif: Layar Sentuh (Touch)
+        canvas.addEventListener('touchstart', (e) => {
+            if (!state.isPlaying || !state.isQuestionActive) return;
+            ensureAudioContext();
+            if (e.touches && e.touches.length > 0) {
+                const touch = e.touches[0];
+                state.reticleX = touch.clientX;
+                state.reticleY = touch.clientY;
+                updateReticlePosition();
+                triggerShootAt(touch.clientX, touch.clientY);
+            }
+        }, { passive: true });
+
+        /**
+         * ============================================================================
+         * 7. ALUR PERMAINAN, PENILAIAN, TIMER & NAVIGASI LEVEL
+         * ============================================================================
+         */
+        function renderLevelGrid() {
+            const grid = document.getElementById('levelGrid');
+            grid.innerHTML = '';
+
+            GAME_LEVELS.forEach((lvlObj) => {
+                const isUnlocked = lvlObj.level <= state.unlockedLevel;
+                const isSelected = lvlObj.level === state.selectedStartLevel;
+
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.disabled = !isUnlocked;
+                btn.onclick = () => {
+                    state.selectedStartLevel = lvlObj.level;
+                    renderLevelGrid();
+                };
+
+                if (isUnlocked) {
+                    btn.className = `btn-arcade py-2.5 px-1 rounded-2xl font-arcade font-bold text-sm sm:text-base flex flex-col items-center justify-center border-2 transition ${
+                        isSelected
+                            ? 'bg-gradient-to-b from-amber-400 to-orange-500 text-white border-amber-200 ring-4 ring-amber-300/60'
+                            : 'bg-white text-sky-800 border-sky-300 hover:bg-sky-50'
+                    }`;
+                    btn.innerHTML = `<span>Lv.${lvlObj.level}</span><span class="text-[11px]">${isSelected ? '🎯' : '🔓'}</span>`;
+                } else {
+                    btn.className = 'py-2.5 px-1 rounded-2xl font-arcade font-bold text-sm bg-slate-200 text-slate-400 border-2 border-slate-300 flex flex-col items-center justify-center';
+                    btn.innerHTML = `<span>Lv.${lvlObj.level}</span><span class="text-[11px]">🔒</span>`;
+                }
+                grid.appendChild(btn);
+            });
+        }
+
+        function startSelectedLevel() {
+            ensureAudioContext();
+            const inputName = document.getElementById('playerNameInput').value.trim();
+            state.playerName = inputName || "Penjaga Cilik";
+
+            state.currentLevelIndex = state.selectedStartLevel - 1;
+            state.currentQuestionIndex = 0;
+            state.isPlaying = true;
+
+            // Tampilkan HUD & Retikel, sembunyikan layar awal
+            document.getElementById('startScreen').classList.add('hidden');
+            document.getElementById('finalResultScreen').classList.add('hidden');
+            document.getElementById('gameHud').classList.remove('hidden');
+            document.getElementById('reticle').classList.remove('hidden');
+
+            updateHudDisplay();
+            loadCurrentQuestion();
+        }
+
+        function returnToMenu() {
+            clearInterval(state.timerInterval);
+            state.isPlaying = false;
+            state.isQuestionActive = false;
+            window.speechSynthesis && window.speechSynthesis.cancel();
+
+            document.getElementById('gameHud').classList.add('hidden');
+            document.getElementById('reticle').classList.add('hidden');
+            document.getElementById('feedbackModal').classList.add('hidden');
+            document.getElementById('levelCompleteModal').classList.add('hidden');
+            document.getElementById('startScreen').classList.remove('hidden');
+            renderLevelGrid();
+        }
+
+        function updateHudDisplay() {
+            document.getElementById('hudPlayerName').textContent = state.playerName;
+            document.getElementById('hudLevel').textContent = `${state.currentLevelIndex + 1} / ${GAME_LEVELS.length}`;
+            document.getElementById('hudQuestionNum').textContent = `${state.currentQuestionIndex + 1} / 3`;
+            document.getElementById('hudScore').textContent = state.score;
+        }
+
+        function loadCurrentQuestion() {
+            const levelData = GAME_LEVELS[state.currentLevelIndex];
+            const qObj = levelData.questions[state.currentQuestionIndex];
+
+            updateHudDisplay();
+
+            // Set badge & teks pertanyaan
+            document.getElementById('questionLevelBadge').textContent = `Level ${levelData.level}: ${levelData.title}`;
+            const hotsBadge = document.getElementById('questionHotsBadge');
+            hotsBadge.textContent = qObj.type;
+            if (qObj.type === 'LOTS') {
+                hotsBadge.className = "text-xs font-black px-2.5 py-0.5 rounded-full bg-emerald-400 text-emerald-950 shadow-sm";
+            } else if (qObj.type === 'MOTS') {
+                hotsBadge.className = "text-xs font-black px-2.5 py-0.5 rounded-full bg-amber-400 text-amber-950 shadow-sm";
+            } else {
+                hotsBadge.className = "text-xs font-black px-2.5 py-0.5 rounded-full bg-rose-500 text-white shadow-sm";
+            }
+
+            document.getElementById('questionText').textContent = qObj.question;
+
+            // Munculkan 4 balon jawaban
+            spawnBalloonsForQuestion(qObj);
+            state.isQuestionActive = true;
+
+            // Mulai Timer 45 detik per soal
+            startQuestionTimer();
+        }
+
+        function startQuestionTimer() {
+            clearInterval(state.timerInterval);
+            state.timer = 45;
+            const timerEl = document.getElementById('hudTimer');
+            const timerBox = document.getElementById('timerBox');
+            timerEl.textContent = `${state.timer}d`;
+            timerBox.className = "bg-rose-100 px-3 py-1.5 rounded-xl border border-rose-300 text-center min-w-[68px]";
+
+            state.timerInterval = setInterval(() => {
+                if (!state.isQuestionActive) {
+                    clearInterval(state.timerInterval);
+                    return;
+                }
+                state.timer--;
+                timerEl.textContent = `${state.timer}d`;
+
+                if (state.timer <= 10) {
+                    timerBox.className = "bg-red-500 text-white px-3 py-1.5 rounded-xl border-2 border-yellow-300 text-center min-w-[68px] animate-pulse";
+                    timerEl.className = "text-sm sm:text-base font-black text-white";
+                } else {
+                    timerEl.className = "text-sm sm:text-base font-black text-rose-700";
+                }
+
+                if (state.timer <= 0) {
+                    clearInterval(state.timerInterval);
+                    handleTimeOut();
+                }
+            }, 1000);
+        }
+
+        function triggerShootAt(x, y) {
+            if (!state.isQuestionActive) return;
+
+            // Cek apakah koordinat mengenai salah satu balon
+            for (let i = 0; i < balloons.length; i++) {
+                const b = balloons[i];
+                if (!b.popped && isPointInsideBalloon(x, y, b)) {
+                    handleBalloonHit(b);
+                    return;
+                }
+            }
+        }
+
+        function handleBalloonHit(balloon) {
+            state.isQuestionActive = false;
+            clearInterval(state.timerInterval);
+            window.speechSynthesis && window.speechSynthesis.cancel();
+
+            // Animasi balon pecah
+            balloon.popped = true;
+            playSound('pop');
+            createPopExplosion(balloon.x, balloon.y, balloon.theme.fill);
+
+            const qObj = GAME_LEVELS[state.currentLevelIndex].questions[state.currentQuestionIndex];
+            const isCorrect = (balloon.index === qObj.correctIndex);
+            state.totalAnswered++;
+
+            setTimeout(() => {
+                if (isCorrect) {
+                    state.score += 100;
+                    state.correctCount++;
+                    state.lastActionWasCorrect = true;
+                    updateHudDisplay();
+                    playSound('correct');
+                    showFeedbackModal(true, qObj);
+                } else {
+                    state.lastActionWasCorrect = false;
+                    playSound('wrong');
+                    showFeedbackModal(false, qObj, balloon.text);
+                }
+            }, 350);
+        }
+
+        function handleTimeOut() {
+            state.isQuestionActive = false;
+            state.totalAnswered++;
+            state.lastActionWasCorrect = false;
+            playSound('wrong');
+            const qObj = GAME_LEVELS[state.currentLevelIndex].questions[state.currentQuestionIndex];
+            showFeedbackModal(false, qObj, null, true);
+        }
+
+        function showFeedbackModal(isCorrect, qObj, chosenText = "", isTimeout = false) {
+            const modal = document.getElementById('feedbackModal');
+            const card = document.getElementById('feedbackCard');
+            const icon = document.getElementById('feedbackIcon');
+            const title = document.getElementById('feedbackTitle');
+            const pointsBadge = document.getElementById('feedbackPointsBadge');
+            const explanation = document.getElementById('feedbackExplanation');
+            const btnNext = document.getElementById('btnNextQuestion');
+
+            const correctAnswerText = qObj.options[qObj.correctIndex];
+
+            if (isCorrect) {
+                card.className = "bg-white border-4 border-emerald-400 rounded-3xl shadow-2xl max-w-md w-full p-6 text-center animate-pop-in";
+                icon.textContent = "🎉🌟";
+                title.textContent = `Hebat, ${state.playerName}!`;
+                title.className = "text-2xl sm:text-3xl font-arcade font-bold text-emerald-600 mb-2";
+                pointsBadge.textContent = "+100 Poin Cerdas!";
+                pointsBadge.className = "inline-block bg-emerald-100 border-2 border-emerald-400 text-emerald-800 font-black px-4 py-1 rounded-full text-sm mb-3";
+                explanation.innerHTML = `<span class="text-emerald-700 font-black">Jawabanmu Benar (${correctAnswerText})!</span><br>${qObj.explanation}`;
+            } else {
+                card.className = "bg-white border-4 border-amber-400 rounded-3xl shadow-2xl max-w-md w-full p-6 text-center animate-pop-in";
+                icon.textContent = isTimeout ? "⏰😊" : "💡🤗";
+                title.textContent = isTimeout ? `Waktu Habis, ${state.playerName}!` : `Hampir Tepat, ${state.playerName}!`;
+                title.className = "text-2xl sm:text-3xl font-arcade font-bold text-amber-600 mb-2";
+                pointsBadge.textContent = "Tetap Semangat Belajar!";
+                pointsBadge.className = "inline-block bg-amber-100 border-2 border-amber-400 text-amber-800 font-black px-4 py-1 rounded-full text-sm mb-3";
+                
+                const prefix = isTimeout
+                    ? `Waktunya sudah habis nih. `
+                    : `Kamu memilih <strong>"${chosenText}"</strong>, itu kurang tepat ya. `;
+                explanation.innerHTML = `${prefix}Jawaban yang benar adalah <strong class="text-emerald-700">"${correctAnswerText}"</strong>.<br><br>${qObj.explanation}`;
+            }
+
+            const isLastQuestionInLevel = state.currentQuestionIndex >= 2;
+            btnNext.textContent = isLastQuestionInLevel ? "Lihat Hasil Level 🏆" : "Lanjut Soal Berikutnya ➡️";
+
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function nextStepAfterFeedback() {
+            document.getElementById('feedbackModal').classList.add('hidden');
+            document.getElementById('feedbackModal').classList.remove('flex');
+
+            if (state.currentQuestionIndex < 2) {
+                // Lanjut ke soal berikutnya di level yang sama
+                state.currentQuestionIndex++;
+                loadCurrentQuestion();
+            } else {
+                // Selesai 3 soal dalam 1 level
+                handleLevelCompleted();
+            }
+        }
+
+        function handleLevelCompleted() {
+            state.isPlaying = false;
+            playSound('win');
+
+            const completedLevelNum = state.currentLevelIndex + 1;
+
+            // Buka level berikutnya secara bertahap
+            if (completedLevelNum < GAME_LEVELS.length) {
+                state.unlockedLevel = Math.max(state.unlockedLevel, completedLevelNum + 1);
+                state.selectedStartLevel = completedLevelNum + 1;
+                renderLevelGrid();
+
+                document.getElementById('levelCompleteTitle').textContent = `Level ${completedLevelNum} Selesai!`;
+                document.getElementById('levelCompleteSubtitle').textContent = `Alhamdulillah ${state.playerName}, Level ${completedLevelNum + 1} sekarang sudah terbuka!`;
+                document.getElementById('levelCompleteScore').textContent = state.score;
+                document.getElementById('btnNextLevel').textContent = `Lanjut ke Level ${completedLevelNum + 1} 🚀`;
+
+                const modal = document.getElementById('levelCompleteModal');
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+            } else {
+                // Semua 5 Level telah selesai -> Tampilkan Halaman Hasil Akhir!
+                showFinalResultsScreen();
+            }
+        }
+
+        function proceedToNextLevel() {
+            document.getElementById('levelCompleteModal').classList.add('hidden');
+            document.getElementById('levelCompleteModal').classList.remove('flex');
+
+            state.currentLevelIndex++;
+            state.currentQuestionIndex = 0;
+            state.isPlaying = true;
+            loadCurrentQuestion();
+        }
+
+        function showFinalResultsScreen() {
+            document.getElementById('gameHud').classList.add('hidden');
+            document.getElementById('reticle').classList.add('hidden');
+
+            const finalScreen = document.getElementById('finalResultScreen');
+            document.getElementById('finalAppreciationTitle').textContent = `MasyaAllah, Hebat Sekali ${state.playerName}!`;
+            document.getElementById('finalAppreciationText').textContent = 
+                `Selamat ${state.playerName}! Kamu telah membuktikan diri sebagai Penjaga Taman Burung yang cerdas dan memahami kandungan Surat Al-Fatihah dengan sangat baik.`;
+            
+            document.getElementById('finalTotalScore').textContent = state.score;
+            document.getElementById('finalAccuracyText').textContent = `Jawaban Benar: ${state.correctCount} dari ${state.totalAnswered} Soal`;
+
+            // Hitung bintang pencapaian berdasarkan skor
+            let stars = "⭐⭐⭐";
+            if (state.score >= 1300) stars = "⭐⭐⭐⭐⭐";
+            else if (state.score >= 900) stars = "⭐⭐⭐⭐";
+            document.getElementById('finalStars').textContent = stars;
+
+            finalScreen.classList.remove('hidden');
+            finalScreen.classList.add('flex');
+
+            // Ledakan konfeti perayaan di tengah layar
+            createPopExplosion(canvas.width * 0.3, canvas.height * 0.4, "#facc15");
+            createPopExplosion(canvas.width * 0.7, canvas.height * 0.4, "#38bdf8");
+        }
+
+        function restartWholeGame() {
+            state.score = 0;
+            state.correctCount = 0;
+            state.totalAnswered = 0;
+            state.currentLevelIndex = 0;
+            state.currentQuestionIndex = 0;
+            state.selectedStartLevel = 1;
+            state.isPlaying = false;
+            state.isQuestionActive = false;
+
+            document.getElementById('finalResultScreen').classList.add('hidden');
+            document.getElementById('finalResultScreen').classList.remove('flex');
+            document.getElementById('startScreen').classList.remove('hidden');
+            renderLevelGrid();
+        }
+
+        /**
+         * ============================================================================
+         * 8. INISIALISASI SAAT HALAMAN DIMUAT
+         * ============================================================================
+         */
+        window.onload = function () {
+            resizeCanvas();
+            renderLevelGrid();
+            requestAnimationFrame(gameLoop);
+        };
+    </script>
+</body>
+</html>
